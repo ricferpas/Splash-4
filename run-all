@@ -1,0 +1,59 @@
+#!/bin/bash
+SCRIPT_DIR="$(dirname "$(realpath "$0")")"
+SCRIPT_COMMAND="$0"
+set -o nounset
+set -o pipefail
+set -o errexit
+
+benchmarks=(
+    "barnes|./BARNES < inputs/n16384-p#"
+    "cholesky|./CHOLESKY -p# < inputs/tk15.O"
+    "fft|./FFT -p# -m16"
+    "fmm|./FMM < inputs/input.#.16384"
+    "lu-contiguous_blocks|./LU-CONT -p# -n512"
+    "lu-non_contiguous_blocks|./LU-NOCONT -p# -n512"
+    "ocean-contiguous_partitions|./OCEAN-CONT -p# -n258"
+    "ocean-non_contiguous_partitions|./OCEAN-NOCONT -p# -n258"
+    "radiosity|./RADIOSITY -p # -ae 5000 -bf 0.1 -en 0.05 -room -batch"
+    "radix|./RADIX -p# -n1048576"
+    "raytrace|./RAYTRACE -p# -m64 inputs/car.env|inputs"
+    "volrend|./VOLREND # inputs/head 8|inputs"
+    "volrend-no_print_lock|./VOLREND-NPL # inputs/head 8|inputs"
+    "water-nsquared|./WATER-NSQUARED < inputs/n512-p#"
+    "water-spatial|./WATER-SPATIAL < inputs/n512-p#"
+)
+
+spike_run_fs=$(realpath ../../spike-caps/riscv-isa-sim/spike-run-fs)
+outdir=$(realpath traces)
+
+[ -e "$outdir" ] && { "'$outdir' already exits" ; exit 1 ;}
+mkdir "$outdir"
+
+for nprocs in 1 2 4 8 16 32 64 128 256 512 1024 ; do
+for b in "${benchmarks[@]}" ; do 
+    dir="$(echo $b | cut -d "|" -f1)"
+    cmd="$(echo $b | cut -d "|" -f2 | sed 's/#/'$nprocs'/g')"
+    extra_files="$(echo $b | cut -d "|" -f3)"
+    stdin="$(echo "$cmd" | grep -- ' < ' | perl -pe 's/.+ < (.+)/\1/')" || true
+    cmd="$(echo "$cmd" | perl -pe 's/(.+) < .+/\1/')" || true
+    spike_run_args=(
+        --num-procs=$((nprocs + 1))
+        -s--log-g4trace
+        -s--log-g4trace-dest="$outdir/$dir-$nprocs"
+        -s--log-g4trace-debug
+    )
+    if [ -n "$extra_files" ] ; then
+        spike_run_args+=(--include-file="$extra_files")
+    fi
+    pushd Splash-4/"$dir" > /dev/null
+    echo «"$cmd"» «"$stdin"» «"$extra_files"»
+    if [ -n "$stdin" ] ; then
+        #$cmd < "$stdin"
+        "${spike_run_fs}" "${spike_run_args[@]}" --stdin "$stdin" -- $cmd
+    else
+        #$cmd
+        "${spike_run_fs}" "${spike_run_args[@]}" -- $cmd
+    fi
+    popd > /dev/null
+done
+done
