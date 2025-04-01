@@ -164,16 +164,18 @@ m4_define(CREATE,
 	assert(__threads__<__MAX_THREADS__);
 	pthread_mutex_lock(&__intern__);
 	for (i = 0; i < ($2) - 1; i++) {
-		BIND(i, __tid__[__threads__-1])
-		Error = pthread_create(&__tid__[__threads__++], NULL, (void * (*)(void *))($1), NULL);
+		if (0) { BIND(i, __tid__[__threads__-1]) }
+		Error = g4tracer_pthread_create(&__tid__[__threads__++], (void * (*)(void *))($1), NULL, true, true);
 		if (Error != 0) {
 			printf("Error in pthread_create().\n");
 			exit(-1);
 		}
 	}
 	pthread_mutex_unlock(&__intern__);
-	BIND(i, __tid__[__threads__-1])
-
+        if (0) { BIND(i, __tid__[__threads__-1]) }
+        g4tracer_init_current_thread();
+        g4tracer_start_tracing();
+        g4tracer_start_ROI();
 	$1();
 }')
 m4_define(WAIT_FOR_END, `{int aantal=$1; while (aantal--) pthread_join(__tid__[aantal], NULL);}')
@@ -182,6 +184,7 @@ m4_define(MAIN_INITENV, `{__tid__[__threads__++]=pthread_self();}')
 m4_define(MAIN_END, `{exit(0);}')
 
 m4_define(INCLUDES,`
+#include "g4tracer-interface.h"
 #include <stdlib.h>
 #include <semaphore.h>
 #include <assert.h>
@@ -198,6 +201,7 @@ m4_define(INCLUDES,`
 
 #define PAGE_SIZE 4096
 #define __MAX_THREADS__ 256
+
 ')
 
 m4_define(MAIN_ENV,`
