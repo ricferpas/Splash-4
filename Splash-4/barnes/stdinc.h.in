@@ -39,8 +39,8 @@ typedef FILE *stream;
 /*
  * BOOL, TRUE and FALSE: standard names for logical values.
  */
-
-typedef long bool;
+#include <stdbool.h>
+//typedef long bool;
 
 #ifndef TRUE
 
