@@ -47,6 +47,7 @@ for b in "${benchmarks[@]}" ; do
     fi
     pushd Splash-4/"$dir" > /dev/null
     echo «"$cmd"» «"$stdin"» «"$extra_files"»
+    set -x
     if [ -n "$stdin" ] ; then
         #$cmd < "$stdin"
         "${spike_run_fs}" "${spike_run_args[@]}" --stdin "$stdin" -- $cmd
@@ -54,6 +55,7 @@ for b in "${benchmarks[@]}" ; do
         #$cmd
         "${spike_run_fs}" "${spike_run_args[@]}" -- $cmd
     fi
+    set +x
     popd > /dev/null
 done
 done
