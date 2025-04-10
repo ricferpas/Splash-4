@@ -23,39 +23,49 @@ benchmarks=(
     "water-spatial|./WATER-SPATIAL < inputs/n512-p#"
 )
 
-spike_run_fs=$(realpath ../../spike-caps/riscv-isa-sim/spike-run-fs)
+if [ $# -ge 1 ] ; then
+    IFS=$'\n'
+    benchmarks=( $(printf "%s\n" "${benchmarks[@]}" | grep "^$1") )
+fi
+
+if [ $# -ge 2 ] ; then
+    all_nprocs=( $2 )
+else
+    all_nprocs=( 1 2 4 8 16 32 64 128 256 512 1024 )
+fi
+
+spike_run_fs=$(realpath "${SCRIPT_DIR}/../../spike-caps/riscv-isa-sim/spike-run-fs")
 outdir=$(realpath traces)
 
-[ -e "$outdir" ] && { "'$outdir' already exits" ; exit 1 ;}
+[ -e "$outdir" ] && { echo "'$outdir' already exits" 2>&1 ; exit 1 ;}
 mkdir "$outdir"
 
-for nprocs in 1 2 4 8 16 32 64 128 256 512 1024 ; do
+for nprocs in ${all_nprocs[@]} ; do
 for b in "${benchmarks[@]}" ; do 
     dir="$(echo $b | cut -d "|" -f1)"
     cmd="$(echo $b | cut -d "|" -f2 | sed 's/#/'$nprocs'/g')"
     extra_files="$(echo $b | cut -d "|" -f3)"
     stdin="$(echo "$cmd" | grep -- ' < ' | perl -pe 's/.+ < (.+)/\1/')" || true
-    cmd="$(echo "$cmd" | perl -pe 's/(.+) < .+/\1/')" || true
+    IFS=' '
+    cmd=("$(echo "$cmd" | perl -pe 's/(.+) < .+/\1/')") || true
     spike_run_args=(
         --num-procs=$((nprocs + 1))
         -s--log-g4trace
         -s--log-g4trace-dest="$outdir/$dir-$nprocs"
-        -s--log-g4trace-debug
+        #-s--log-g4trace-debug
     )
     if [ -n "$extra_files" ] ; then
         spike_run_args+=(--include-file="$extra_files")
     fi
-    pushd Splash-4/"$dir" > /dev/null
-    echo «"$cmd"» «"$stdin"» «"$extra_files"»
-    set -x
     if [ -n "$stdin" ] ; then
-        #$cmd < "$stdin"
-        "${spike_run_fs}" "${spike_run_args[@]}" --stdin "$stdin" -- $cmd
-    else
-        #$cmd
-        "${spike_run_fs}" "${spike_run_args[@]}" -- $cmd
+        spike_run_args+=(--stdin "$stdin")
     fi
-    set +x
+    full_cmd=( "${spike_run_fs}" "${spike_run_args[@]}" -- "${cmd[@]}" )
+    pushd Splash-4/"$dir" > /dev/null
+    echo "Executing Splash-4/$dir for $nprocs processors:"
+    echo "${full_cmd[@]}"
+    time "${full_cmd[@]}"
+    echo ""
     popd > /dev/null
 done
 done
