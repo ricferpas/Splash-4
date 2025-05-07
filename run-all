@@ -47,7 +47,7 @@ for b in "${benchmarks[@]}" ; do
     extra_files="$(echo $b | cut -d "|" -f3)"
     stdin="$(echo "$cmd" | grep -- ' < ' | perl -pe 's/.+ < (.+)/\1/')" || true
     IFS=' '
-    cmd=("$(echo "$cmd" | perl -pe 's/(.+) < .+/\1/')") || true
+    cmd=($(echo "$cmd" | perl -pe 's/(.+) < .+/\1/')) || true
     spike_run_args=(
         --num-procs=$((nprocs + 1))
         -s--log-g4trace
