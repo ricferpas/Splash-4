@@ -19,8 +19,8 @@ benchmarks=(
     "raytrace|./RAYTRACE -p# -m64 inputs/car.env|inputs"
     "volrend|./VOLREND # inputs/head 8|inputs"
     "volrend-no_print_lock|./VOLREND-NPL # inputs/head 8|inputs"
-    "water-nsquared|./WATER-NSQUARED < inputs/n512-p#"
-    "water-spatial|./WATER-SPATIAL < inputs/n512-p#"
+    "water-nsquared|./WATER-NSQUARED < inputs/n512-p#|random.in"
+    "water-spatial|./WATER-SPATIAL < inputs/n512-p#|random.in"
 )
 
 if [ $# -ge 2 ] ; then
