@@ -59,6 +59,7 @@ m4_define(BARRIER,
   m4_ifdef(`ATOMIC_BARRIERS',
 `{
 _NOTE_START_BARRIER();
+g4tracer_begin_sm_barrier(&($2));
 __local_sense__ = !__local_sense__;
 if (atomic_fetch_sub(&(__count__), 1) == 1) {
 	__count__ = $2;
@@ -66,11 +67,13 @@ if (atomic_fetch_sub(&(__count__), 1) == 1) {
 } else {
 	do {} while (LOAD(__sense__) != __local_sense__);
 }
+g4tracer_end_sm();
 _NOTE_END_BARRIER();
 }'
 ,
 `{
 _NOTE_START_BARRIER();
+g4tracer_begin_sm_barrier(&($1));
 pthread_mutex_lock(&(($1).bar_mutex));
 ($1).bar_teller++;
 if (($1).bar_teller == ($2)) {
@@ -80,6 +83,7 @@ if (($1).bar_teller == ($2)) {
 	pthread_cond_wait(&(($1).bar_cond), &(($1).bar_mutex));
 }
 pthread_mutex_unlock(&(($1).bar_mutex));
+g4tracer_end_sm();
 _NOTE_END_BARRIER();}
 '))
 
@@ -110,26 +114,26 @@ m4_define(BAREXTERN,
 
 m4_define(LOCKDEC, `pthread_mutex_t $1;')
 m4_define(LOCKINIT, `{pthread_mutex_init(&($1),NULL);}')
-m4_define(LOCK, `{_NOTE_START_LOCK(); pthread_mutex_lock(&($1)); _NOTE_END_LOCK();}')
-m4_define(UNLOCK, `{_NOTE_START_UNLOCK(); pthread_mutex_unlock(&($1)); _NOTE_END_UNLOCK();}')
+m4_define(LOCK, `{_NOTE_START_LOCK(); g4tracer_begin_sm_mutex_lock(&($1)); pthread_mutex_lock(&($1)); g4tracer_end_sm();_NOTE_END_LOCK();}')
+m4_define(UNLOCK, `{_NOTE_START_UNLOCK(); g4tracer_begin_sm_mutex_unlock(&($1)); pthread_mutex_unlock(&($1)); g4tracer_end_sm(); _NOTE_END_UNLOCK();}')
 
 m4_define(ALOCKDEC, `pthread_mutex_t ($1)[$2];')
 m4_define(ALOCKINIT, `{ int i; for(i = 0; i < ($2); i++) pthread_mutex_init(&(($1)[i]), NULL); }')
-m4_define(ALOCK, `{_NOTE_START_LOCK(); pthread_mutex_lock(&(($1)[($2)])); _NOTE_END_LOCK();}')
+m4_define(ALOCK, `{_NOTE_START_LOCK(); g4tracer_begin_sm_mutex_lock(&(($1)[($2)])); pthread_mutex_lock(&(($1)[($2)])); g4tracer_end_sm(); _NOTE_END_LOCK();}')
 m4_define(AGETL, `(($1)[$2])')
-m4_define(AULOCK, `{_NOTE_START_UNLOCK(); pthread_mutex_unlock(&(($1)[($2)])); _NOTE_END_UNLOCK();}')
+m4_define(AULOCK, `{_NOTE_START_UNLOCK(); g4tracer_begin_sm_mutex_unlock(&(($1)[($2)])); pthread_mutex_unlock(&(($1)[($2)])); g4tracer_end_sm(); _NOTE_END_UNLOCK();}')
 
 m4_define(PAUSEDEC, `sem_t $1;')
 m4_define(PAUSEINIT, `{sem_init(&($1),0,0);}')
 m4_define(CLEARPAUSE, `{;}')
-m4_define(SETPAUSE, `{_NOTE_START_SEM_POST(); sem_post(&($1)); _NOTE_END_SEM_POST();}')
-m4_define(WAITPAUSE, `{_NOTE_START_SEM_WAIT(); sem_wait(&($1)); _NOTE_END_SEM_WAIT();}')
+m4_define(SETPAUSE, `{_NOTE_START_SEM_POST(); g4tracer_begin_sm_condition_signal(&($1)); sem_post(&($1)); g4tracer_end_sm(); _NOTE_END_SEM_POST();}')  m4_dnl TODO
+m4_define(WAITPAUSE, `{_NOTE_START_SEM_WAIT(); g4tracer_begin_sm_condition_wait(&($1), (void *) ((((int*)&($1))) + 1)); sem_wait(&($1)); g4tracer_end_sm(); _NOTE_END_SEM_WAIT();}') m4_dnl TODO
 
 m4_define(CONDVARDEC, `pthread_cond_t $1;')
 m4_define(CONDVARINIT, `pthread_cond_init(&($1), NULL);')
-m4_define(CONDVARWAIT,`{ _NOTE_START_WAIT(); pthread_cond_wait(&($1), &($2)); _NOTE_END_WAIT(); }')
-m4_define(CONDVARSIGNAL,`{ _NOTE_START_SIGNAL(); pthread_cond_signal(&($1)); _NOTE_END_SIGNAL(); }')
-m4_define(CONDVARBCAST,`{ _NOTE_START_BDCAST(); pthread_cond_broadcast(&($1)); _NOTE_END_BDCAST(); }')
+m4_define(CONDVARWAIT,`{ _NOTE_START_WAIT(); g4tracer_begin_sm_condition_wait(&($1), &($2)); pthread_cond_wait(&($1), &($2)); g4tracer_end_sm(); _NOTE_END_WAIT(); }')
+m4_define(CONDVARSIGNAL,`{ _NOTE_START_SIGNAL(); g4tracer_begin_sm_condition_signal(&($1)); pthread_cond_signal(&($1)); g4tracer_end_sm(); _NOTE_END_SIGNAL(); }')
+m4_define(CONDVARBCAST,`{ _NOTE_START_BDCAST(); g4tracer_begin_sm_condition_broadcast(&($1)); pthread_cond_broadcast(&($1)); g4tracer_end_sm(); _NOTE_END_BDCAST(); }')
 
 m4_define(RELEASE_FENCE, `{ atomic_thread_fence(memory_order_release);}')
 m4_define(ACQUIRE_FENCE, `{ atomic_thread_fence(memory_order_acquire);}')
