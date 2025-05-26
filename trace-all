@@ -23,33 +23,37 @@ benchmarks=(
     "water-spatial|./WATER-SPATIAL < inputs/n512-p#"
 )
 
-if [ $# -ge 1 ] ; then
+if [ $# -ge 2 ] ; then
     IFS=$'\n'
-    benchmarks=( $(printf "%s\n" "${benchmarks[@]}" | grep "^$1") )
+    read -r -a benchmarks <<< "$(printf "%s\n" "${benchmarks[@]}" | grep "^$2") )"
 fi
 
-if [ $# -ge 2 ] ; then
-    all_nprocs=( $2 )
+if [ $# -ge 3 ] ; then
+    IFS=" "
+    read -r -a all_nprocs <<< "$3"
 else
     all_nprocs=( 1 2 4 8 16 32 64 128 256 512 1024 )
 fi
 
-spike_run_fs=$(realpath "${SCRIPT_DIR}/../../spike-caps/riscv-isa-sim/spike-run-fs")
-outdir=$(realpath traces)
+spike_run_fs="${SPIKE_RUN_FS:-$(realpath "${SCRIPT_DIR}/../../spike-caps/riscv-isa-sim/spike-run-fs")}"
+outdir=$(realpath "${1:-traces}")
 
 [ -e "$outdir" ] && { echo "'$outdir' already exits" 2>&1 ; exit 1 ;}
 mkdir "$outdir"
 
-for nprocs in ${all_nprocs[@]} ; do
+scripts=( )
+
+for nprocs in "${all_nprocs[@]}" ; do
 for b in "${benchmarks[@]}" ; do 
-    dir="$(echo $b | cut -d "|" -f1)"
-    cmd="$(echo $b | cut -d "|" -f2 | sed 's/#/'$nprocs'/g')"
-    extra_files="$(echo $b | cut -d "|" -f3)"
+    dir="$(echo "$b" | cut -d "|" -f1)"
+    cmd="$(echo "$b" | cut -d "|" -f2 | sed 's/#/'"$nprocs"'/g')"
+    extra_files="$(echo "$b" | cut -d "|" -f3)"
     stdin="$(echo "$cmd" | grep -- ' < ' | perl -pe 's/.+ < (.+)/\1/')" || true
     IFS=' '
-    cmd=($(echo "$cmd" | perl -pe 's/(.+) < .+/\1/')) || true
+    read -r -a cmd <<< "$(echo "$cmd" | perl -pe 's/(.+) < .+/\1/' || true)"
     spike_run_args=(
         --num-procs=$((nprocs + 1))
+        -s-m16384 # ocean-nocont actaully needs this
         -s--log-g4trace
         -s--log-g4trace-dest="$outdir/$dir-$nprocs"
         #-s--log-g4trace-debug
@@ -61,11 +65,22 @@ for b in "${benchmarks[@]}" ; do
         spike_run_args+=(--stdin "$stdin")
     fi
     full_cmd=( "${spike_run_fs}" "${spike_run_args[@]}" -- "${cmd[@]}" )
-    pushd Splash-4/"$dir" > /dev/null
-    echo "Executing Splash-4/$dir for $nprocs processors:"
-    echo "${full_cmd[@]}"
-    time "${full_cmd[@]}"
-    echo ""
-    popd > /dev/null
+    script="$outdir/$dir-$nprocs.command"
+    printf "#!/bin/bash\ncd %q\n%s\n" "$(realpath Splash-4/"$dir")" "$(printf "%q " "${full_cmd[@]}")" > "$script"
+    chmod +x "$script"
+    scripts+=("$script")
 done
 done
+
+EXECUTE="no"
+
+if [ "$EXECUTE" = "yes" ] ; then
+    for s in "${scripts[@]}" ; do
+        echo "Executing $(basename "$s" | sed 's/.command//'):"
+        tail -n+2 "$s"
+        time "$s"
+        echo ""
+    done
+fi
+
+# find "$outdir" -name '*command' | parallel --results results
