@@ -32,7 +32,7 @@ if [ $# -ge 3 ] ; then
     IFS=" "
     read -r -a all_nprocs <<< "$3"
 else
-    all_nprocs=( 1 2 4 8 16 32 64 128 256 512 1024 )
+    all_nprocs=( 1 2 4 8 16 32 64 128 256 ) #512 1024 )
 fi
 
 spike_run_fs="${SPIKE_RUN_FS:-$(realpath "${SCRIPT_DIR}/../../spike-caps/riscv-isa-sim/spike-run-fs")}"
@@ -52,7 +52,8 @@ for b in "${benchmarks[@]}" ; do
     IFS=' '
     read -r -a cmd <<< "$(echo "$cmd" | perl -pe 's/(.+) < .+/\1/' || true)"
     spike_run_args=(
-        --num-procs=$((nprocs + 1))
+        #--num-procs=$((nprocs + 1))
+        --num-procs="$(sort -n <<< "$((nprocs + 1))"$'\n'"16" | head -n1)"
         -s-m16384 # ocean-nocont actaully needs this
         -s--log-g4trace
         -s--log-g4trace-dest="$outdir/$dir-$nprocs"
