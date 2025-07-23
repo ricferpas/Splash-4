@@ -123,11 +123,49 @@ m4_define(ALOCK, `{_NOTE_START_LOCK(); g4tracer_begin_sm_mutex_lock(&(($1)[($2)]
 m4_define(AGETL, `(($1)[$2])')
 m4_define(AULOCK, `{_NOTE_START_UNLOCK(); g4tracer_begin_sm_mutex_unlock(&(($1)[($2)])); pthread_mutex_unlock(&(($1)[($2)])); g4tracer_end_sm(); _NOTE_END_UNLOCK();}')
 
-m4_define(PAUSEDEC, `sem_t $1;')
-m4_define(PAUSEINIT, `{sem_init(&($1),0,0);}')
-m4_define(CLEARPAUSE, `{;}')
-m4_define(SETPAUSE, `{_NOTE_START_SEM_POST(); g4tracer_begin_sm_condition_signal(&($1)); sem_post(&($1)); g4tracer_end_sm(); _NOTE_END_SEM_POST();}')  m4_dnl TODO
-m4_define(WAITPAUSE, `{_NOTE_START_SEM_WAIT(); g4tracer_begin_sm_condition_wait(&($1), (void *) ((((int*)&($1))) + 1)); sem_wait(&($1)); g4tracer_end_sm(); _NOTE_END_SEM_WAIT();}') m4_dnl TODO
+m4_define(PAUSEDEC, `
+struct {
+        pthread_mutex_t Mutex;
+        pthread_cond_t  CondVar;
+        unsigned long   Flag;
+} $1;
+')
+m4_define(PAUSEINIT, `{
+        pthread_mutex_init(&$1.Mutex, NULL);
+        pthread_cond_init(&$1.CondVar, NULL);
+        $1.Flag = 0;
+}
+')
+m4_define(CLEARPAUSE, `{
+        $1.Flag = 0;
+        g4tracer_begin_sm_mutex_unlock(&(($1).Mutex));
+        pthread_mutex_unlock(&$1.Mutex);
+        g4tracer_end_sm();
+        }
+')
+m4_define(SETPAUSE, `{
+        g4tracer_begin_sm_mutex_lock(&(($1).Mutex));
+        pthread_mutex_lock(&$1.Mutex);
+        g4tracer_end_sm();
+        $1.Flag = 1;
+        g4tracer_begin_sm_condition_broadcast(&(($1).CondVar));
+        pthread_cond_broadcast(&$1.CondVar);
+        g4tracer_end_sm();
+        g4tracer_begin_sm_mutex_unlock(&(($1).Mutex));
+        pthread_mutex_unlock(&$1.Mutex);
+        g4tracer_end_sm();
+        }
+')
+m4_define(WAITPAUSE, `{
+        g4tracer_begin_sm_mutex_lock(&(($1).Mutex));
+        pthread_mutex_lock(&$1.Mutex);
+        g4tracer_end_sm();
+        if ($1.Flag == 0) {
+                g4tracer_begin_sm_condition_wait(&($1.CondVar), &($1.Mutex));
+                pthread_cond_wait(&$1.CondVar, &$1.Mutex);
+                g4tracer_end_sm();
+        }
+}')
 
 m4_define(CONDVARDEC, `pthread_cond_t $1;')
 m4_define(CONDVARINIT, `pthread_cond_init(&($1), NULL);')
